@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getPatient, getPatientAnalyses } from '../services/firestore';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { colors } from '../theme/colors';
@@ -48,21 +48,21 @@ const PatientDetailScreen: React.FC<{ route: any; navigation: any }> = ({ route,
   const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'scans'>('overview');
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       try {
-        const [pRes, aRes] = await Promise.all([
-          api.get(`/patients/${patientId}`),
-          api.get(`/patients/${patientId}/analyses`),
+        const [pat, anas] = await Promise.all([
+          getPatient(patientId),
+          getPatientAnalyses(patientId),
         ]);
-        setPatient(pRes.data.patient);
-        setAnalyses(aRes.data.analyses || []);
+        setPatient(pat);
+        setAnalyses(anas);
       } catch {
         Alert.alert('Error', 'Failed to load patient.');
       } finally {
         setLoading(false);
       }
     };
-    fetch();
+    fetchData();
   }, [patientId]);
 
   if (loading) {

@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getAnalysis, getPatient } from '../services/firestore';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import FindingCard, { type MedicalFinding } from '../components/analysis/FindingCard';
@@ -57,14 +57,14 @@ const AnalysisReportScreen: React.FC<{ route: any; navigation: any }> = ({
   const [activeFinding, setActiveFinding] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get(`/analysis/${analysisId}`);
-        setReport(res.data.analysis);
-        if (res.data.analysis.patientId) {
+        const analysis = await getAnalysis(analysisId);
+        setReport(analysis);
+        if (analysis?.patientId) {
           try {
-            const pRes = await api.get(`/patients/${res.data.analysis.patientId}`);
-            setPatient(pRes.data.patient);
+            const pat = await getPatient(analysis.patientId);
+            setPatient(pat);
           } catch {}
         }
       } catch {
@@ -73,7 +73,7 @@ const AnalysisReportScreen: React.FC<{ route: any; navigation: any }> = ({
         setLoading(false);
       }
     };
-    fetch();
+    fetchData();
   }, [analysisId]);
 
   const handleShare = async () => {

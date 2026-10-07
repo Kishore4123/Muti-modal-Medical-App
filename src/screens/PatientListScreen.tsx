@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getPatients, createPatient } from '../services/firestore';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -52,15 +52,14 @@ const PatientListScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
-      const endpoint = isAdmin ? '/admin/patients' : '/patients';
-      const res = await api.get(endpoint);
-      setPatients(res.data.patients || []);
+      const pats = await getPatients(user!.uid, user!.role);
+      setPatients(pats);
     } catch {
       Alert.alert('Error', 'Failed to load patients.');
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   useEffect(() => {
     fetchPatients();
@@ -73,7 +72,7 @@ const PatientListScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     }
     setCreating(true);
     try {
-      await api.post('/patients', {
+      await createPatient({
         name: form.name.trim(),
         age: parseInt(form.age, 10),
         gender: form.gender,
@@ -84,13 +83,15 @@ const PatientListScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         currentMedications: form.currentMedications
           ? form.currentMedications.split(',').map((s) => s.trim())
           : [],
+        assignedDoctorId: user!.uid,
+        assignedDoctorName: user!.displayName || '',
       });
       Alert.alert('Success', `Patient ${form.name} registered.`);
       setModalVisible(false);
       setForm({ name: '', age: '', gender: 'Male', bloodType: 'O+', phone: '', medicalHistory: '', allergies: '', currentMedications: '' });
       fetchPatients();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Could not create patient.');
+      Alert.alert('Error', err.message || 'Could not create patient.');
     } finally {
       setCreating(false);
     }

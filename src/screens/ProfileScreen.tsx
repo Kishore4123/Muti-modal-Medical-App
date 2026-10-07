@@ -10,7 +10,7 @@ import {
 import { signOut } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
-import api from '../config/api';
+import { updateUserProfile, getUserProfile } from '../services/firestore';
 import { useAuthStore } from '../store/authStore';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -32,11 +32,12 @@ const ProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await api.put('/auth/profile', form);
-      setUser(res.data.user);
+      await updateUserProfile(user!.uid, form);
+      const updated = await getUserProfile(user!.uid);
+      setUser(updated);
       Alert.alert('Success', 'Profile updated.');
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to update profile.');
+      Alert.alert('Error', err.message || 'Failed to update profile.');
     } finally {
       setSaving(false);
     }

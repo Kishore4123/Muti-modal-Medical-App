@@ -9,7 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getAllDoctors, getAllPatients, getAuditLogs, getAnalyses, updateDoctorStatus, transferPatient } from '../services/firestore';
+import { useAuthStore } from '../store/authStore';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -44,6 +45,7 @@ interface AuditLog {
 }
 
 const AdminScreen: React.FC = () => {
+  const { user } = useAuthStore();
   const [tab, setTab] = useState<'doctors' | 'patients' | 'audits'>('doctors');
   const [stats, setStats] = useState({ totalDoctors: 0, totalPatients: 0, totalAnalyses: 0 });
   const [doctors, setDoctors] = useState<DoctorUser[]>([]);
@@ -59,16 +61,16 @@ const AdminScreen: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [s, d, p, a] = await Promise.all([
-        api.get('/admin/stats'),
-        api.get('/admin/doctors'),
-        api.get('/admin/patients'),
-        api.get('/admin/audit-logs'),
+      const [docs, pats, logs, anas] = await Promise.all([
+        getAllDoctors(),
+        getAllPatients(),
+        getAuditLogs(),
+        getAnalyses(user!.uid, 'admin'),
       ]);
-      setStats(s.data.stats || s.data);
-      setDoctors(d.data.doctors || []);
-      setPatients(p.data.patients || []);
-      setAudits(a.data.logs || []);
+      setStats({ totalDoctors: docs.length, totalPatients: pats.length, totalAnalyses: anas.length });
+      setDoctors(docs);
+      setPatients(pats);
+      setAudits(logs);
     } catch {
       Alert.alert('Error', 'Failed to load admin data.');
     } finally {
@@ -81,11 +83,11 @@ const AdminScreen: React.FC = () => {
   const toggleStatus = async (doc: DoctorUser) => {
     const next = doc.status === 'active' ? 'suspended' : 'active';
     try {
-      await api.patch(`/admin/doctors/${doc.id || doc.uid}/status`, { status: next });
+      await updateDoctorStatus(doc.id || doc.uid, next);
       Alert.alert('Success', `${doc.displayName} is now ${next}.`);
       fetchData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed.');
+      Alert.alert('Error', err.message || 'Failed.');
     }
   };
 
@@ -93,12 +95,13 @@ const AdminScreen: React.FC = () => {
     if (!selectedPatient || !targetDocId) return;
     setTransferring(true);
     try {
-      await api.patch(`/admin/patients/${selectedPatient.id}/transfer`, { targetDoctorId: targetDocId });
+      const targetDoc = doctors.find((d) => (d.id || d.uid) === targetDocId);
+      await transferPatient(selectedPatient.id, targetDocId, targetDoc?.displayName || '');
       Alert.alert('Success', 'Patient transferred.');
       setTransferModal(false);
       fetchData();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || 'Transfer failed.');
+      Alert.alert('Error', err.message || 'Transfer failed.');
     } finally {
       setTransferring(false);
     }

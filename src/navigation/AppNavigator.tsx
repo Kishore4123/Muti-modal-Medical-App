@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
-import api from '../config/api';
+import { getUserProfile } from '../services/firestore';
 import { useAuthStore } from '../store/authStore';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { colors } from '../theme/colors';
@@ -124,14 +124,14 @@ export default function AppNavigator() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const idToken = await firebaseUser.getIdToken();
-          const res = await api.post('/auth/signin', { idToken });
-          setUser(res.data.user);
-        } catch (err: any) {
-          if (!err.response?.data?.needsRegistration) {
+          const profile = await getUserProfile(firebaseUser.uid);
+          if (profile) {
+            setUser(profile);
+          } else {
             setUser(null);
           }
-          setLoading(false);
+        } catch {
+          setUser(null);
         }
       } else {
         setUser(null);

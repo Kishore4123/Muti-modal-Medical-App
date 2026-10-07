@@ -31,7 +31,9 @@
           "photosPermission": "TetrixAI needs access to your photos to upload medical scans for AI analysis.",
           "cameraPermission": "TetrixAI needs access to your camera to capture medical scans for AI analysis."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ]
   }
 }

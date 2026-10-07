@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getPatients, getAnalyses } from '../services/firestore';
 import { useAuthStore } from '../store/authStore';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -56,13 +56,21 @@ const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const endpoint = isAdmin ? '/admin/patients' : '/patients';
-        const [pRes, aRes] = await Promise.all([
-          api.get(endpoint),
-          api.get('/analysis'),
+        const [pats, rawAnalyses] = await Promise.all([
+          getPatients(user!.uid, user!.role),
+          getAnalyses(user!.uid, user!.role),
         ]);
-        setPatients(pRes.data.patients || []);
-        setAnalyses(aRes.data.analyses || []);
+        setPatients(pats);
+        setAnalyses(
+          rawAnalyses.map((a: any) => ({
+            id: a.id,
+            patientName: a.doctorName || a.imageType,
+            patientId: a.patientId,
+            imageType: a.imageType,
+            confidenceScore: a.analysis?.findings?.[0]?.confidence || 0,
+            createdAt: a.createdAt,
+          })),
+        );
       } catch {
         Alert.alert('Error', 'Failed to load dashboard data.');
       } finally {

@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
-import api from '../config/api';
+import { getUserProfile, createUserProfile } from '../services/firestore';
 import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import { colors } from '../theme/colors';
@@ -63,20 +63,19 @@ const SignInScreen: React.FC = () => {
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
-      const idToken = await cred.user.getIdToken();
-      const res = await api.post('/auth/signin', { idToken });
-      setUser(res.data.user);
-    } catch (err: any) {
-      if (err.response?.data?.needsRegistration) {
+      const profile = await getUserProfile(cred.user.uid);
+      if (profile) {
+        setUser(profile);
+      } else {
         Alert.alert('No Profile', 'No doctor profile found. Please sign up first.');
         setTab('signup');
         setSignupEmail(loginEmail);
-      } else {
-        Alert.alert(
-          'Sign In Failed',
-          err.response?.data?.error || err.message || 'Unable to authenticate.',
-        );
       }
+    } catch (err: any) {
+      Alert.alert(
+        'Sign In Failed',
+        err.message || 'Unable to authenticate.',
+      );
     } finally {
       setLoading(false);
     }
@@ -104,22 +103,27 @@ const SignInScreen: React.FC = () => {
         signupPassword,
       );
       await updateProfile(cred.user, { displayName: signupName.trim() });
-      const idToken = await cred.user.getIdToken();
 
-      const res = await api.post('/auth/register', {
-        idToken,
+      await createUserProfile(cred.user.uid, {
+        uid: cred.user.uid,
+        email: signupEmail.trim(),
         displayName: signupName.trim(),
+        role: 'doctor',
         specialization,
         licenseNumber: licenseNumber.trim(),
         hospital: hospital.trim(),
         phone: phone.trim(),
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
 
-      setUser(res.data.user);
+      const profile = await getUserProfile(cred.user.uid);
+      setUser(profile);
     } catch (err: any) {
       Alert.alert(
         'Registration Failed',
-        err.response?.data?.error || err.message || 'Could not create account.',
+        err.message || 'Could not create account.',
       );
     } finally {
       setLoading(false);

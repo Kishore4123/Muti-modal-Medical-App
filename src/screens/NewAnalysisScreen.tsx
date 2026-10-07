@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../config/api';
+import { getPatients, getPatient, saveAnalysis, getPriorAnalyses, generateId } from '../services/firestore';
+import { analyzemedicalImage } from '../services/geminiService';
+import { useAuthStore } from '../store/authStore';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { colors } from '../theme/colors';
@@ -41,6 +44,7 @@ const NewAnalysisScreen: React.FC<{ route: any; navigation: any }> = ({
   route,
   navigation,
 }) => {
+  const { user } = useAuthStore();
   const preselectedId = route.params?.patientId || '';
 
   const [patients, setPatients] = useState<PatientOption[]>([]);
@@ -55,9 +59,8 @@ const NewAnalysisScreen: React.FC<{ route: any; navigation: any }> = ({
   const [loadingPatients, setLoadingPatients] = useState(true);
 
   useEffect(() => {
-    api
-      .get('/patients')
-      .then((res) => setPatients(res.data.patients || []))
+    getPatients(user!.uid, user!.role)
+      .then((pats) => setPatients(pats))
       .catch(() => Alert.alert('Error', 'Failed to load patients.'))
       .finally(() => setLoadingPatients(false));
   }, []);
@@ -114,27 +117,56 @@ const NewAnalysisScreen: React.FC<{ route: any; navigation: any }> = ({
 
     setAnalyzing(true);
     try {
-      const formData = new FormData();
-      formData.append('image', {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: 'scan.jpg',
-      } as any);
-      formData.append('patientId', selectedPatientId);
-      formData.append('imageType', imageType);
-      formData.append('clinicalNotes', clinicalNotes.trim());
-      formData.append('findings', preliminaryFindings.trim());
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-      const res = await api.post('/analysis/analyze', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const patient = await getPatient(selectedPatientId);
+      const priorAnalyses = await getPriorAnalyses(selectedPatientId);
+
+      const analysisResult = await analyzemedicalImage({
+        imageBase64: base64,
+        imageMimeType: 'image/jpeg',
+        clinicalNotes: clinicalNotes.trim(),
+        preliminaryFindings: preliminaryFindings.trim(),
+        priorAnalyses,
+        imageType,
+        patientInfo: {
+          age: patient.age,
+          gender: patient.gender,
+          medicalHistory: patient.medicalHistory || '',
+          currentMedications: patient.currentMedications || [],
+          allergies: patient.allergies || [],
+        },
+      });
+
+      const analysisId = generateId();
+      const imageDataUrl =
+        base64.length <= 900 * 1024
+          ? `data:image/jpeg;base64,${base64}`
+          : null;
+
+      await saveAnalysis({
+        id: analysisId,
+        patientId: selectedPatientId,
+        doctorId: user!.uid,
+        doctorName: user!.displayName || '',
+        imageType,
+        imageName: 'scan.jpg',
+        imageDataUrl,
+        clinicalNotes: clinicalNotes.trim(),
+        findings: preliminaryFindings.trim(),
+        analysis: analysisResult,
+        status: 'completed',
+        createdAt: new Date().toISOString(),
       });
 
       Alert.alert('Success', 'Analysis complete!');
-      navigation.navigate('AnalysisReport', { analysisId: res.data.analysis.id });
+      navigation.navigate('AnalysisReport', { analysisId });
     } catch (err: any) {
       Alert.alert(
         'Analysis Failed',
-        err.response?.data?.error || 'Please check API configuration.',
+        err.message || 'Please check API configuration.',
       );
     } finally {
       setAnalyzing(false);
